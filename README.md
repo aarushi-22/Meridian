@@ -1,2 +1,0 @@
-# Meridian
-Internship Alert Tool
