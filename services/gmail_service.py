@@ -6,7 +6,7 @@ def readID(creds):
     try:
     # Call the Gmail API
         service = build("gmail", "v1", credentials=creds)
-        results = service.users().messages().list(userId="me", maxResults = 10).execute()
+        results = service.users().messages().list(userId="me", q="chennai.pat@vit.ac.in", maxResults = 5).execute()
         messages = results.get("messages", [])
 
         #if not labels:
@@ -36,6 +36,6 @@ def readMessage(creds,message_id):
             receiver = h["value"]
     print("Message id:",message_id)
     print("From:",sender)
-    print("To:",receiver)
+    #print("To:",receiver)
     print("Subject:",subject)
     print()

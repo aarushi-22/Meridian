@@ -6,6 +6,7 @@ Automates internship application tracking by reading placement emails and schedu
 - Google OAuth authentication working
 - Gmail & Calendar APIs enabled
 - Can fetch and display gmail metadata
+- Can filter by sender 
 
 ## Tech
 - Python
