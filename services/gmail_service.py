@@ -1,7 +1,9 @@
+import base64
 import os.path
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-
+def decode_base64(data):
+    return base64.urlsafe_b64decode(data).decode("utf-8", errors="ignore")
 def readID(creds):
     try:
     # Call the Gmail API
@@ -39,3 +41,24 @@ def readMessage(creds,message_id):
     #print("To:",receiver)
     print("Subject:",subject)
     print()
+
+def getMail(creds,message_id):
+    service = build("gmail", "v1", credentials=creds)
+    message = service.users().messages().get( userId="me", id=message_id, format="full").execute()
+    payload = message["payload"]
+
+    if payload.get("body", {}).get("data"):
+        text = decode_base64(payload["body"]["data"])
+        print(text)
+        return
+    if "parts" in payload:
+        for part in payload["parts"]:
+            if part["mimeType"] == "text/plain":
+                body = part["body"].get("data")
+                if body:
+                    text = base64.urlsafe_b64decode(body).decode("utf-8", errors="ignore")
+                    print(text)
+                    return
+
+    print("No readable body found.")
+    return None
