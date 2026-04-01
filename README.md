@@ -1,36 +1,60 @@
 # Meridian
 
-> Reads placement cell emails. Schedules internship deadlines to your Google Calendar.
+> Automatically extracts internship deadlines from placement emails and schedules them to Google Calendar.
+
+Meridian connects to your Gmail account, detects placement cell emails, extracts internship application deadlines using an LLM, and creates calendar reminders so you never miss an application window.
 
 ---
 
-## How it works
+## Overview
 
-1. Meridian connects to your Gmail via Google OAuth (read-only)
-2. It watches for emails from your placement cell sender ID
-3. An AI agent (Claude) parses each email — extracts company name, deadline, and application link
-4. It creates a Google Calendar event with reminders before the deadline
-5. Every email is fingerprinted so nothing is ever scheduled twice
+Placement cell emails often contain important internship deadlines buried inside long messages or attachments. Meridian automates the process of extracting those deadlines and scheduling them directly into your calendar.
+
+Meridian performs the following steps:
+
+1. Connects to Gmail using Google OAuth (read-only access)
+2. Fetches emails from configured placement cell sender IDs
+3. Uses an LLM to extract structured information (company, deadline, application link)
+4. Creates a Google Calendar event with configurable reminders
+5. Uses Gmail message IDs to ensure each email is processed only once
 
 ---
 
-## Project structure
+## Architecture
+
+```
+Gmail API
+   │
+   ▼
+Meridian Pipeline
+   │
+   ├── Email parsing
+   ├── LLM extraction (Claude)
+   ├── Deadline validation
+   │
+   ▼
+Google Calendar API
+```
+
+---
+
+## Project Structure
 
 ```
 meridian/
 ├── auth/
-│   └── google_auth.py          # OAuth 2.0 flow, token refresh
+│   └── google_auth.py          # OAuth 2.0 flow and token refresh
 ├── services/
-│   ├── gmail_service.py        # Gmail API — fetch, decode, parse attachments
-│   └── calendar_service.py     # Google Calendar API — create events
+│   ├── gmail_service.py        # Gmail API integration
+│   └── calendar_service.py     # Google Calendar event creation
 ├── core/
-│   ├── extractor.py            # Claude AI — extract company/deadline/link from email
-│   ├── pipeline.py             # Orchestrator — ties all steps together
-│   └── scheduler.py            # APScheduler (90-min poll) + Pub/Sub push handler
+│   ├── extractor.py            # LLM extraction logic
+│   ├── pipeline.py             # Main orchestration pipeline
+│   └── scheduler.py            # Scheduled polling
 ├── api/
-│   └── app.py                  # FastAPI server — webhook + REST endpoints
+│   └── app.py                  # FastAPI server for manual triggers
 ├── db/
-│   └── database.py             # SQLite — idempotency store + user config
+│   └── database.py             # SQLite storage for processed emails
 ├── main.py                     # CLI entrypoint
 ├── requirements.txt
 ├── .env.example
@@ -39,140 +63,127 @@ meridian/
 
 ---
 
-## Quickstart
+## Installation
 
-### 1. Install dependencies
+### 1. Clone the repository
 
 ```bash
+git clone https://github.com/yourusername/meridian.git
 cd meridian
+```
+
+### 2. Create a virtual environment
+
+```bash
 python -m venv venv
-source venv/bin/activate          # Windows: venv\Scripts\activate
+source venv/bin/activate
+```
+
+Windows:
+
+```bash
+venv\Scripts\activate
+```
+
+### 3. Install dependencies
+
+```bash
 pip install -r requirements.txt
 ```
 
-### 2. Set up Google Cloud credentials
+---
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com)
-2. Create a project (or use an existing one)
-3. Enable **Gmail API** and **Google Calendar API**
-4. Go to **APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID**
-5. Application type: **Desktop app**
-6. Download the JSON file and save it as `credentials.json` in the project root
+## Google API Setup
 
-### 3. Set your Anthropic API key
+1. Open the [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project
+3. Enable:
+   - Gmail API
+   - Google Calendar API
+4. Go to **APIs & Services → Credentials**
+5. Create **OAuth 2.0 Client ID**
+6. Select **Desktop App**
+7. Download the credentials file and save it as `credentials.json` in the project root
+
+---
+
+## Environment Configuration
+
+Copy the example environment file:
 
 ```bash
 cp .env.example .env
-# Edit .env and add your ANTHROPIC_API_KEY
 ```
 
-Then load it before running:
-```bash
-export ANTHROPIC_API_KEY=sk-ant-...   # or use python-dotenv
+Add your API key:
+
+```
+ANTHROPIC_API_KEY=your_api_key_here
 ```
 
-### 4. First-time setup
+Meridian uses **Claude Haiku** for fast and low-cost email extraction.
+
+---
+
+## First-Time Setup
+
+Run the setup wizard:
 
 ```bash
 python main.py setup
 ```
 
-This will ask you for:
-- Your degree type (btech / mtech)
-- Your registration number
-- The placement cell email ID(s) to watch (e.g. `placementcell@vit.ac.in`)
-- Reminder timing (default: 24 hrs and 2 hrs before deadline)
-- Which Google Calendar to write to
+The wizard will ask for:
 
-A browser window will open for Google sign-in. After that, `token.json` is saved locally.
+- Degree type (btech / mtech)
+- Registration number
+- Placement cell sender email
+- Reminder timings
+- Target Google Calendar
 
-### 5. Run your first test
+After configuration, a browser window will open for Google authentication. OAuth tokens are stored locally as `token.json`.
+
+---
+
+## Running Meridian
+
+Run a single email processing cycle:
 
 ```bash
 python main.py run
 ```
 
-This fetches the 10 most recent emails from your configured senders, runs AI extraction on each, and schedules calendar events for any upcoming deadlines found.
+This will:
+
+1. Fetch recent placement emails
+2. Extract internship deadlines
+3. Create calendar reminders
 
 ---
 
-## Commands
+## CLI Commands
 
-| Command | What it does |
-|---|---|
-| `python main.py setup` | First-time interactive configuration wizard |
-| `python main.py run` | Run one poll cycle immediately |
-| `python main.py status` | View config and recent scheduled events |
-| `python main.py server` | Start FastAPI server (for push notifications) |
-
----
-
-## Phases
-
-### Phase 1 — Local script (works right now)
-Run `python main.py run` manually or set up a cron job. No server needed.
-
-```bash
-# Example: run every 90 minutes via cron
-*/90 * * * * cd /path/to/meridian && python main.py run
-```
-
-### Phase 2 — Automatic polling
-Start the server and the built-in scheduler handles polling every 90 minutes:
-```bash
-python main.py server
-```
-
-### Phase 3 — Gmail push notifications (instant)
-For near-instant email detection, set up Gmail Pub/Sub:
-
-1. Create a Google Cloud Pub/Sub topic
-2. Grant `gmail-api-push@system.gserviceaccount.com` the `Pub/Sub Publisher` role on it
-3. Set `PUBSUB_TOPIC=projects/YOUR_PROJECT/topics/YOUR_TOPIC` in `.env`
-4. Expose your server publicly (e.g. via [ngrok](https://ngrok.com) for dev, or deploy to Railway/Fly.io)
-5. Start the server — it auto-registers the Gmail watch on startup
-
-Google will POST to `https://your-server.com/webhook/gmail` whenever a new email arrives.
+| Command                 | Description                              |
+| ----------------------- | ---------------------------------------- |
+| `python main.py setup`  | Run initial configuration wizard         |
+| `python main.py run`    | Execute a single email processing cycle  |
+| `python main.py status` | Display configuration and recent events  |
+| `python main.py server` | Start FastAPI server                     |
 
 ---
 
-## How idempotency works
+## AI Extraction
 
-Every processed email is stored in SQLite using Gmail's native `message_id` as the primary key.
+For each email, Meridian sends the following data to the LLM:
 
-```
-Email arrives
-     │
-     ▼
-Is message_id in processed_messages?
-     │
-    YES ──→ Skip immediately (no API calls made)
-     │
-    NO
-     │
-     ▼
-Extract + schedule
-     │
-     ▼
-Write message_id to DB  ← only after calendar write succeeds
-```
+- Email subject
+- Email date
+- Plain text email body
+- Extracted URLs
+- Spreadsheet attachment content (if present)
 
-This means:
-- The 90-min poll and push notifications can both fire on the same email — only one event is ever created
-- If the calendar write fails, the message is NOT marked processed, so it will be retried next cycle
-- Restarting the server never causes duplicate events
+The model returns structured JSON:
 
----
-
-## How AI extraction works
-
-For each email, the Claude API receives:
-- Email subject and date
-- Plain-text body (HTML stripped)
-- A list of URLs found in the email
-- Spreadsheet attachment content (for round 2/3 shortlist emails)
-
-Claude returns structured JSON:
 ```json
 {
   "company_name": "Google",
@@ -184,65 +195,105 @@ Claude returns structured JSON:
 }
 ```
 
-**Important:** The AI only selects application URLs from links literally present in the email — it never generates or hallucinates URLs.
-
-Low-confidence events (confidence < 0.7) get a ⚠ prefix in the calendar title and a note to verify the deadline manually.
+Low-confidence extractions are marked with a warning prefix in the generated calendar event.
 
 ---
 
-## Round 2/3 shortlist detection
+## Idempotent Processing
 
-When your placement cell sends a shortlist with student registration numbers in an Excel attachment:
+Each processed email is recorded in SQLite using the Gmail `message_id`.
 
-1. Meridian downloads and parses the `.xlsx` file using `openpyxl`
-2. It searches for your registration number in the spreadsheet **in Python** (never sent to the AI)
-3. If found, the calendar event is flagged "You appear in the shortlist" with the relevant row
+```
+Email arrives
+     │
+     ▼
+Check message_id
+     │
+  Exists → Skip
+     │
+  New
+     │
+     ▼
+Extract + Schedule Event
+     │
+     ▼
+Save message_id
+```
+
+This guarantees that emails are never processed more than once.
 
 ---
 
-## Security
+## Shortlist Detection
 
-| Practice | Implementation |
-|---|---|
-| OAuth 2.0 only | Never stores passwords. Uses Google's own consent screen. |
-| Minimal scopes | `gmail.readonly` + `calendar.events` — nothing else |
-| No email storage | Raw email bodies are never written to disk or database |
-| Token stored locally | `token.json` lives only on your machine |
-| Registration number | Stored in SQLite, never logged, never sent to external APIs |
-| Revocation | `DELETE /revoke` calls Google's revoke endpoint and deletes `token.json` |
-| `.gitignore` | `credentials.json`, `token.json`, `.env`, and `*.db` are all gitignored |
+For emails containing shortlist spreadsheets:
+
+1. Meridian downloads `.xlsx` attachments
+2. Parses them using `openpyxl`
+3. Searches for the user's registration number locally
+4. Flags the calendar event if the student appears in the shortlist
+
+The registration number is **never sent to the AI model**.
 
 ---
 
-## API endpoints (server mode)
+## Security Practices
 
-| Method | Route | Description |
-|---|---|---|
-| `GET` | `/health` | Liveness check |
-| `POST` | `/webhook/gmail` | Gmail Pub/Sub push receiver |
-| `GET` | `/events` | List recently scheduled events |
-| `GET` | `/config` | View user configuration |
-| `POST` | `/config` | Update user configuration |
-| `POST` | `/run` | Manually trigger a poll cycle |
-| `DELETE` | `/revoke` | Revoke Google access |
+| Practice                     | Implementation                                                                 |
+| ---------------------------- | ------------------------------------------------------------------------------ |
+| OAuth 2.0 authentication     | No passwords stored                                                            |
+| Minimal API scopes           | Gmail read-only and calendar events only                                       |
+| No email storage             | Raw email bodies are never persisted                                           |
+| Local token storage          | OAuth tokens remain on the user's machine                                      |
+| Registration number privacy  | Never sent to external APIs                                                    |
+| Git protection               | Secrets excluded via `.gitignore`                                              |
+| CSRF protection              | State parameter validated on OAuth callback to prevent cross-site request forgery |
+| XSS prevention               | All user-facing output in the FastAPI server is escaped before rendering       |
+| CORS policy                  | Server restricts allowed origins to prevent unauthorized cross-origin requests |
+| Prompt injection mitigation  | Email content is passed as data, not instructions; LLM output is validated against a strict JSON schema before use |
 
-Interactive API docs available at `http://localhost:8000/docs` when the server is running.
+Ignored files include:
+
+```
+credentials.json
+token.json
+.env
+*.db
+```
+
+---
+
+## API Endpoints (Server Mode)
+
+| Method   | Endpoint   | Description                        |
+| -------- | ---------- | ---------------------------------- |
+| `GET`    | `/health`  | Service health check               |
+| `GET`    | `/events`  | List recently scheduled events     |
+| `GET`    | `/config`  | Retrieve configuration             |
+| `POST`   | `/config`  | Update configuration               |
+| `POST`   | `/run`     | Trigger manual pipeline execution  |
+| `DELETE` | `/revoke`  | Revoke Google OAuth access         |
+
+Interactive docs available at `http://localhost:8000/docs`.
 
 ---
 
 ## Troubleshooting
 
-**`credentials.json not found`**
-Download your OAuth credentials from Google Cloud Console and place the file in the project root.
+**`credentials.json` not found**
+Ensure the OAuth credentials file is placed in the project root.
 
-**`No sender IDs configured`**
-Run `python main.py setup` first.
+**No sender IDs configured**
+Run `python main.py setup`.
 
-**`deadline already passed`**
-The email was processed but the deadline had already passed. This is expected for old emails on first run.
+**Deadline already passed**
+The email was processed successfully, but the deadline had already expired.
 
-**Calendar events created with ⚠ prefix**
-The AI wasn't confident about the deadline date. Open the original email to verify before applying.
+**Low-confidence event warnings**
+Verify the deadline in the original email before applying.
 
-**`PUBSUB_TOPIC not set — polling-only mode active`**
-This is fine for Phase 1/2. Push notifications are optional. Polling every 90 minutes will catch all emails.
+---
+
+## Author
+
+Developed as a personal automation tool for managing internship application deadlines from placement emails.
