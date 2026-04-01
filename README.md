@@ -1,6 +1,6 @@
 # Meridian
 
-> Reads placement cell emails. Schedules internship deadlines to your Google Calendar. Automatically.
+> Reads placement cell emails. Schedules internship deadlines to your Google Calendar.
 
 ---
 
