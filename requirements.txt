@@ -1,0 +1,27 @@
+# Google APIs
+google-api-python-client==2.136.0
+google-auth==2.32.0
+google-auth-httplib2==0.2.0
+google-auth-oauthlib==1.2.1
+
+# AI extraction
+anthropic==0.34.0
+
+# Web server
+fastapi==0.112.2
+uvicorn[standard]==0.30.6
+
+# Background scheduler (polling fallback)
+APScheduler==3.10.4
+
+# Spreadsheet parsing (round-2/3 attachments)
+openpyxl==3.1.5
+
+# ── Security ──────────────────────────────────────────────────────────────────
+
+# JWT verification for Google Pub/Sub OIDC tokens
+PyJWT==2.9.0
+cryptography==43.0.1       # RSA key support for PyJWT
+
+# python-dotenv for loading .env in development
+python-dotenv==1.0.1
